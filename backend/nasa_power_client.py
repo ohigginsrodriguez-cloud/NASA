@@ -4,7 +4,7 @@ from datetime import date
 BASE_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 
 
-def get_power_power_data(
+def get_power_data(
     lat: float,
     lon: float,
     start_date: str,
@@ -36,7 +36,7 @@ def get_power_power_data(
 
 if __name__ == "__main__":
     # prueba rapida para verificar que la api responde
-    data = get_power_power_data(
+    data = get_power_data(
         lat=20.9674,
         lon=89.5926,
         start_date="20250101",
