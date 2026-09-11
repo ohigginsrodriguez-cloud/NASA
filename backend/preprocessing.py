@@ -43,9 +43,9 @@ def preprocess_power_data(raw_json: dict) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
-    from nasa_power_client import get_power_power_data
+    from nasa_power_client import get_power_data
 
-    raw = get_power_power_data(
+    raw = get_power_data(
         lat=20.9674,
         lon=-89.5926,
         start_date="20250101",

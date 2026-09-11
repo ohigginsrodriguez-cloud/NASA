@@ -1,2 +1,13 @@
 streamlit
 requests
+pandas
+numpy
+plotly
+matplotlib
+altair
+pydeck
+python-dotenv
+streamlit-option-menu
+streamlit-extras
+fastapi
+uvicorn

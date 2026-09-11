@@ -1,69 +1,85 @@
-from fastapi import FastAPI, HTTPException
+"""FastAPI backend: NASA POWER -> modelo de riesgo de sequía -> JSON.
+
+Levantar desde la raíz del proyecto:
+    uvicorn backend.main:app --reload --port 8000
+"""
+
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
-from nasa_power_client import get_power_data
-from preprocessing import preprocess_power_data
-from predict import calculate_drought_risk, get_current_risk_summary
+try:  # lanzado desde la raíz del proyecto (uvicorn backend.main:app)
+    from backend.drought_risk import compute_risk_series, records, summarize
+    from backend.nasa_power_client import get_power_data
+    from backend.preprocessing import preprocess_power_data
+except ModuleNotFoundError:  # lanzado dentro de backend/ (uvicorn main:app)
+    from drought_risk import compute_risk_series, records, summarize
+    from nasa_power_client import get_power_data
+    from preprocessing import preprocess_power_data
 
-app = FastAPI(title="Drought Risk API - NASA Space Apps Practice")
+app = FastAPI(
+    title="NASA Clima México API",
+    description="Demo de hackathon: series climáticas de NASA POWER y "
+    "riesgo simplificado de sequía para México.",
+    version="0.1.0",
+)
 
-# CORS: necesario para que Streamlit (u otro origen) pueda llamar a este backend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # para práctica está bien abierto; en prod se restringe
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/")
-def root():
-    return {"status": "ok", "message": "Drought Risk API funcionando"}
+def _power_to_risk(lat: float, lon: float, start_date: str, end_date: str) -> dict:
+    """Descarga NASA POWER, preprocesa y calcula el riesgo de sequía."""
+    try:
+        raw = get_power_data(
+            lat, lon, start_date, end_date, parameters=["T2M", "PRECTOTCORR"]
+        )
+    except Exception as exc:  # noqa: BLE001 - transformar en error HTTPS
+        raise HTTPException(status_code=502, detail=f"NASA POWER no respondió: {exc}")
+
+    df = preprocess_power_data(raw)
+    if df.empty:
+        raise HTTPException(status_code=404, detail="Sin datos para ese punto/periodo")
+    return compute_risk_series(df)
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok", "api": "NASA Clima México"}
 
 
 @app.get("/drought-risk")
 def drought_risk(
-    lat: float,
-    lon: float,
-    start_date: str,  # formato YYYYMMDD
-    end_date: str,  # formato YYYYMMDD
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    start_date: str = Query(..., pattern=r"^\d{8}$"),
+    end_date: str = Query(..., pattern=r"^\d{8}$"),
 ):
-    """
-    Regresa la serie histórica completa con score de riesgo de sequía por día.
-    """
-    try:
-        raw = get_power_data(lat, lon, start_date, end_date)
-        df = preprocess_power_data(raw)
-        df = calculate_drought_risk(df)
-    except Exception as e:
-        raise HTTPException(
-            status_code=502, detail=f"Error consultando NASA POWER: {e}"
-        )
-
-    # convertir a formato JSON-friendly (lista de registros con fecha como string)
-    df_reset = df.reset_index()
-    df_reset["date"] = df_reset["date"].dt.strftime("%Y-%m-%d")
-
-    return df_reset.to_dict(orient="records")
+    """Serie diaria con el score de riesgo y sus componentes."""
+    series = _power_to_risk(lat, lon, start_date, end_date)
+    return records(series)
 
 
 @app.get("/drought-risk/summary")
 def drought_risk_summary(
-    lat: float,
-    lon: float,
-    start_date: str,
-    end_date: str,
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    start_date: str = Query(..., pattern=r"^\d{8}$"),
+    end_date: str = Query(..., pattern=r"^\d{8}$"),
 ):
-    """
-    Regresa solo el resumen del día más reciente (más liviano para un dashboard simple).
-    """
-    try:
-        raw = get_power_data(lat, lon, start_date, end_date)
-        df = preprocess_power_data(raw)
-        df = calculate_drought_risk(df)
-    except Exception as e:
-        raise HTTPException(
-            status_code=502, detail=f"Error consultando NASA POWER: {e}"
-        )
+    """Resumen del día más reciente: score, categoría, racha seca y anomalía térmica."""
+    series = _power_to_risk(lat, lon, start_date, end_date)
+    return summarize(series)
 
-    return get_current_risk_summary(df)
+
+if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import uvicorn
+
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=8000, reload=True)

@@ -1,34 +1,64 @@
+﻿import datetime as dt
+
 import streamlit as st
 
-
-def render_time_range():
-    st.markdown("###  Rango de fechas")
-    start = st.date_input("Desde", value=None)
-    end = st.date_input("Hasta", value=None)
-    return start, end
-
-
-def render_coordinates():
-    st.markdown("###  Coordenadas")
-    lat = st.number_input("Latitud", min_value=-90.0, max_value=90.0, value=0.0, step=0.1)
-    lon = st.number_input("Longitud", min_value=-180.0, max_value=180.0, value=0.0, step=0.1)
-    return lat, lon
-
-
-def render_sliders():
-    st.markdown("###  Parámetros")
-    pa = st.slider("Parámetro A", 0, 100, 50)
-    pb = st.slider("Parámetro B", 0.0, 10.0, 1.0, step=0.1)
-    return pa, pb
+from config import (
+    DEFAULT_LOCATION,
+    DEFAULT_PARAMS,
+    LOCATIONS,
+    PARAMS,
+    POWER_MIN_YEAR,
+)
 
 
 def render_filters():
+    """Sidebar: presets de ubicaciÃ³n, coordenadas, periodo y variables."""
     with st.sidebar:
-        st.markdown("##  NASA Hackathon")
+        st.markdown("### Panel de consulta")
+        st.caption("Variables fÃ­sicas satelitales de NASA POWER.")
+
+        preset = st.selectbox(
+            "UbicaciÃ³n",
+            list(LOCATIONS),
+            index=list(LOCATIONS.keys()).index(DEFAULT_LOCATION),
+        )
+        lat, lon = LOCATIONS[preset]["lat"], LOCATIONS[preset]["lon"]
+
+        c1, c2 = st.columns(2)
+        lat = c1.number_input("Latitud", -90.0, 90.0, lat, step=0.0001, format="%.4f")
+        lon = c2.number_input("Longitud", -180.0, 180.0, lon, step=0.0001, format="%.4f")
+
+        st.markdown("**Periodo**")
+        today = dt.date.today()
+        default_start = today.replace(year=today.year - 6)
+        rango = st.date_input(
+            "Rango de fechas",
+            value=(default_start, today),
+            min_value=dt.date(POWER_MIN_YEAR, 1, 1),
+            max_value=today,
+        )
+        if isinstance(rango, (tuple, list)) and len(rango) == 2:
+            start, end = rango
+        else:
+            start, end = default_start, today
+
+        if start >= end:
+            st.error("La fecha inicial debe ser anterior a la final.")
+            start, end = default_start, today
+
+        params = st.multiselect("Variables", list(PARAMS), default=DEFAULT_PARAMS)
+        if not params:
+            st.warning("Selecciona al menos una variable.")
+            params = DEFAULT_PARAMS[:1]
+
         st.markdown("---")
-        start, end = render_time_range()
-        lat, lon = render_coordinates()
-        pa, pb = render_sliders()
-        st.markdown("---")
-        aplicar = st.button("Aplicar filtros")
-    return {"start": start, "end": end, "lat": lat, "lon": lon, "pa": pa, "pb": pb, "aplicar": aplicar}
+        aplicar = st.button("Cargar datos", type="primary", width="stretch")
+
+    return {
+        "lat": lat,
+        "lon": lon,
+        "start": start,
+        "end": end,
+        "params": params,
+        "aplicar": aplicar,
+    }
