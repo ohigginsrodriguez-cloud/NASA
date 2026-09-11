@@ -9,7 +9,7 @@ from frontend.components.map_view import render_map
 def build_layout(filtros):
     st.set_page_config(page_title="NASA Hackathon", page_icon="🚀", layout="wide")
 
-    st.markdown("## 🚀 NASA Hackathon")
+    st.markdown("##  NASA Hackathon")
     st.markdown("### Dashboard")
     st.markdown("---")
 
